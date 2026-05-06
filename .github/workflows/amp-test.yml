@@ -1,0 +1,26 @@
+name: "Amplification Test"
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Target URL to amplify"
+        required: true
+        default: "https://webhook.site/0f1e8db4-ff29-4e2b-bcbd-a7ed2edd08d1"
+      count:
+        description: "Number of HTTP requests per dispatch"
+        required: false
+        default: "5"
+jobs:
+  amplify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Make outbound requests
+        run: |
+          TARGET="${{ github.event.inputs.target }}"
+          COUNT="${{ github.event.inputs.count }}"
+          for i in $(seq 1 $COUNT); do
+            echo "Request $i to $TARGET"
+            curl -s -o /dev/null -w "%{http_code}" "$TARGET?run=${{ github.run_id }}&req=$i" || true
+            echo ""
+          done
+          echo "Done amplifying"
