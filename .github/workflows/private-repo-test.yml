@@ -1,0 +1,21 @@
+name: Private Repo Checkout Test
+on:
+  workflow_dispatch:
+jobs:
+  checkout-private:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Try checkout private repo
+        uses: actions/checkout@v4
+        with:
+          repository: BH00002/bugbounty-test-private
+          token: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+      - name: Report result
+        run: |
+          if [ -f README.md ]; then
+            echo "PRIVATE REPO CHECKOUT SUCCEEDED - THIS IS A VULNERABILITY"
+            cat README.md
+          else
+            echo "Private repo checkout blocked (expected)"
+          fi
