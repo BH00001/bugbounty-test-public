@@ -1,0 +1,13 @@
+name: "Amplification Test"
+on:
+  workflow_dispatch:
+jobs:
+  amplify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Outbound HTTP test
+        run: |
+          # Single outbound request from Actions runner
+          curl -s -o /dev/null -w "HTTP_CODE:%{http_code}\n" "https://webhook.site/5e33175a-2b5b-44d2-af83-caca5cbb9f2d?source=github-actions-amplify&size=test"
+          # Measure response
+          curl -s -o /dev/null -w "SIZE:%{size_download}\n" "https://api.github.com/repos/BH00001/bugbounty-test-public"
